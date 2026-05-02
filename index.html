@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HERO-QUEST</title>
+
+<style>
+body{
+    background:#111;
+    color:#fff;
+    text-align:center;
+    font-family:sans-serif;
+}
+
+canvas{
+    border:1px solid #fff;
+    display:block;
+    margin:0 auto;
+    width:90vw;
+    max-width:500px;
+    height:auto;
+}
+
+button{
+    margin:5px;
+    padding:15px;
+    font-size:16px;
+    width:80%;
+    max-width:300px;
+}
+
+#status{
+    margin:10px;
+    color:#0f0;
+}
+
+#log{
+    height:150px;
+    overflow:auto;
+    font-size:16px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>HERO-QUEST</h1>
+
+<canvas id="canvas" width="500" height="400"></canvas>
+
+<div id="status"></div>
+<div id="ui"></div>
+<div id="log"></div>
+
+<script>
+
+function rand(a,b){
+    return Math.floor(Math.random()*(b-a+1))+a;
+}
+
+// ================= HERO =================
+class Hero{
+    constructor(){
+        this.max_hp=100;
+        this.hp=100;
+        this.poison=0;
+        this.stun = 0;
+        this.guard=false;
+        this.physRes = 0;
+        this.magRes  = 0;
+    }
+}
+
+// ================= ENEMY =================
+class Enemy{
+    constructor(name,hp,pattern,img){
+        this.name=name;
+        this.hp=hp;
+        this.pattern=pattern;
+        this.turn=0;
+
+        this.img=new Image();
+        this.img.src=img;
+        this.loaded=false;
+        this.img.onload=()=>this.loaded=true;
+
+        this.physRes=0;
+        this.magRes=0;
+
+        this.tempPhys=0;
+        this.tempMag=0;
+
+        this.charge=false;
+        this.cast=false;
+    }
+
+    next(){
+        let a=this.pattern[this.turn];
+        this.turn=(this.turn+1)%this.pattern.length;
+        return a;
+    }
+}
+
+// ================= GAME =================
+class Game{
+
+    constructor(){
+
+        this.cv=document.getElementById("canvas");
+        this.ctx=this.cv.getContext("2d");
+        this.ctx.font="16px sans-serif";
+
+        this.ui=document.getElementById("ui");
+        this.log=document.getElementById("log");
+        this.statusBox=document.getElementById("status");
+
+        this.hero=new Hero();
+        this.stage=0;
+        this.mode=null;
+
+        this.enemies=[];
+        this.enemyRects=[];
+
+        this.bg=new Image();
+
+        this.cv.addEventListener("click",(e)=>this.click(e));
+        this.cv.addEventListener("touchstart",(e)=>{
+            e.preventDefault();
+            let touch = e.touches[0];
+            this.click({
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+        });
+
+        this.state="title";
+
+        this.processing = false;
+
+        this.loop();
+        this.showTitle();
+    }
+
+    // ================= LOOP =================
+    loop(){
+        requestAnimationFrame(()=>this.loop());
+
+        if(this.state==="play"){
+            this.draw();
+        }
+    }
+
+    // ================= CLEAR =================
+    clear(){
+        this.ctx.clearRect(0,0,500,400);
+        this.ctx.fillStyle="#111";
+        this.ctx.fillRect(0,0,500,400);
+    }
+
+    // ================= LOG =================
+    logClear(){
+        this.log.innerHTML="";
+    }
+
+    logMsg(t){
+        this.log.innerHTML+=t+"<br>";
+        this.log.scrollTop = this.log.scrollHeight;
+    }
+
+    // ================= BUTTON =================
+    btn(t,f){
+        let b=document.createElement("button");
+        b.textContent=t;
+        b.onclick=f;
+        this.ui.appendChild(b);
+    }
+
+    // ================= STATUS =================
+    updateStatus(){
+        this.statusBox.innerHTML=
+        `HP:${this.hero.hp}/${this.hero.max_hp}
+        毒:${this.hero.poison}
+        スタン:${this.hero.stun}
+        防御:${this.hero.guard?"ON":"OFF"}
+        敵:${this.enemies.filter(e=>e.hp>0).length}`;
+    }
+
+    // ================= TITLE =================
+    showTitle(){
+
+        this.state="title";
+
+        this.enemies=[];
+        this.enemyRects=[];
+        this.mode=null;
+
+        this.ui.innerHTML="";
+        this.logClear();
+
+        this.clear();
+
+        this.bg.src="castle.png";
+
+        this.btn("冒険開始",()=>this.start());
+        this.btn("クレジット", () => this.showCredit());
+    }
+
+    showCredit(){
+
+        this.state = "credit";
+
+        // 既存UIをクリア
+        this.ui.innerHTML = "";
+        this.logClear();
+
+        // 背景ぼかしON
+        this.cv.style.filter = "blur(4px)";
+        this.statusBox.style.filter = "blur(4px)";
+        this.log.style.filter = "blur(4px)";
+
+        // ===== UIを前面パネル化 =====
+        this.ui.style.position = "absolute";
+        this.ui.style.top = "80px";              
+        this.ui.style.left = "50%";
+        this.ui.style.transform = "translateX(-50%)";
+        this.ui.style.background = "rgba(0,0,0,0.7)";
+        this.ui.style.padding = "20px";
+        this.ui.style.border = "1px solid #fff";
+        this.ui.style.width = "300px";
+
+        // クレジット表示（制作者）
+        let title = document.createElement("div");
+        title.textContent = "制作者";
+        title.style.fontSize = "18px";
+        title.style.fontWeight = "bold";
+        title.style.margin = "8px";
+
+        let text = document.createElement("div");
+        text.innerHTML = `
+            Nakamura Yuta<br>
+            <a href="https://x.com/nakamurayuta26" target="_blank" style="color:#4af;">
+                Twitterはこちら
+            </a>
+        `;
+        text.style.fontSize = "12px";
+
+        // 制作協力
+        let title2 = document.createElement("div");
+        title2.textContent = "制作協力";
+        title2.style.fontSize = "18px";
+        title2.style.fontWeight = "bold";
+        title2.style.margin = "8px";
+
+        let text2 = document.createElement("div");
+        text2.innerHTML = "ChatGPT<br>いらすとや";
+        text2.style.fontSize = "12px";
+
+        // 戻るボタン
+        let btn = document.createElement("button");
+        btn.textContent = "戻る";
+        btn.style.marginTop = "15px";
+        btn.onclick = () => this.backToTitle();
+
+        // 追加
+        this.ui.appendChild(title);
+        this.ui.appendChild(text);
+        this.ui.appendChild(title2);
+        this.ui.appendChild(text2);
+        this.ui.appendChild(btn);
+    }
+
+    showAbility(){
+
+        this.state = "ability";
+
+        this.ui.innerHTML = "";
+        this.logClear();
+
+        // ぼかし
+        this.cv.style.filter = "blur(4px)";
+        this.statusBox.style.filter = "blur(4px)";
+        this.log.style.filter = "blur(4px)";
+
+        // ===== UIパネル化 =====
+        this.ui.style.position = "absolute";
+        this.ui.style.top = "80px";
+        this.ui.style.left = "50%";
+        this.ui.style.transform = "translateX(-50%)";
+        this.ui.style.background = "rgba(0,0,0,0.8)";
+        this.ui.style.padding = "20px";
+        this.ui.style.border = "1px solid #fff";
+        this.ui.style.width = "320px";
+
+        // ===== 勇者画像 =====
+        let img = document.createElement("img");
+        img.src = "yuusya_game.png";
+        img.style.width = "120px";
+        img.style.display = "block";
+        img.style.margin = "0 auto 10px";
+
+        // ===== タイトル =====
+        let title = document.createElement("div");
+        title.textContent = "勇者の能力";
+        title.style.fontSize = "18px";
+        title.style.fontWeight = "bold";
+        title.style.margin = "10px";
+
+        // ===== 説明 =====
+        let text = document.createElement("div");
+        text.innerHTML = `
+            攻撃：20〜30ダメージ（クリティカルあり）<br>
+            魔法：15〜25ダメージ（全体攻撃）<br>
+            回復：15〜25回復＋毒解除<br>
+            防御：被ダメージ半減<br>
+        `;
+        text.style.fontSize = "14px";
+
+        // ===== 戻るボタン =====
+        let btn = document.createElement("button");
+        btn.textContent = "戻る";
+        btn.style.marginTop = "15px";
+        btn.onclick = () => this.backToBattle();
+
+        // ===== 追加 =====
+        this.ui.appendChild(img);
+        this.ui.appendChild(title);
+        this.ui.appendChild(text);
+        this.ui.appendChild(btn);
+    }
+
+    backToTitle(){
+
+        // ぼかし解除
+        this.cv.style.filter = "none";
+        this.statusBox.style.filter = "none";
+        this.log.style.filter = "none";
+
+        // ===== UIスタイルリセット =====
+        this.ui.style.position = "static";
+        this.ui.style.top = "";
+        this.ui.style.left = "";
+        this.ui.style.transform = "";
+        this.ui.style.background = "";
+        this.ui.style.padding = "";
+        this.ui.style.border = "";
+        this.ui.style.width = "";
+
+        this.showTitle();
+    }
+
+    backToBattle(){
+
+        // ぼかし解除
+        this.cv.style.filter = "none";
+        this.statusBox.style.filter = "none";
+        this.log.style.filter = "none";
+
+        // ===== UIスタイルリセット =====
+        this.ui.style.position = "static";
+        this.ui.style.top = "";
+        this.ui.style.left = "";
+        this.ui.style.transform = "";
+        this.ui.style.background = "";
+        this.ui.style.padding = "";
+        this.ui.style.border = "";
+        this.ui.style.width = "";
+
+        this.state = "play";
+
+        this.battle();
+    }
+
+    // ================= START =================
+    start(){
+        this.state="play";
+
+        this.hero=new Hero();
+        this.stage=0;
+
+        this.nextStage();
+    }
+
+    // ================= STAGE =================
+    nextStage(){
+
+        this.ui.innerHTML="";
+        this.logClear();
+
+        const stages=[
+            {name:"プロローグ",bg:"castle.png"},
+            {name:"スライム",bg:"bg_natural_sougen.jpg"},
+            {name:"ゴブリン",bg:"bg_natural_sougen.jpg"},
+            {name:"ゾンビ",bg:"halloween_background_purple.png"},
+            {name:"デュラハン",bg:"halloween_background_purple.png"},
+            {name:"ドラゴン",bg:"bg_hell_jigoku.jpg"},
+            {name:"魔王",bg:"bg_hell_jigoku.jpg"},
+            {name:"エピローグ",bg:"castle.png"}
+        ];
+
+        let s=stages[this.stage];
+
+        if(!s){
+            this.showTitle();
+            return;
+        }
+
+        this.bg.src=s.bg;
+
+        if(s.name==="プロローグ"){
+            this.logMsg("物語が始まる...");
+            this.btn("次へ",()=>{this.stage++;this.nextStage();});
+            return;
+        }
+
+        if(s.name==="エピローグ"){
+            this.logMsg("世界は救われた！");
+            this.btn("タイトルへ",()=>this.showTitle());
+            return;
+        }
+
+        this.enemies=[];
+
+        const E=(n,hp,img,p)=>new Enemy(n,hp,p,img);
+
+        if(s.name==="スライム")
+            this.enemies.push(E("スライム",25,"fantasy_game_character_slime.png",["攻撃"]));
+
+        if(s.name==="ゴブリン"){
+            this.enemies.push(E("ゴブリン",30,"fantasy_goblin.png",["攻撃","攻撃","待機"]));
+            this.enemies.push(E("ゴブリン",30,"fantasy_goblin.png",["攻撃","待機","攻撃"]));
+        }
+
+        if(s.name==="ゾンビ"){
+            this.enemies.push(E("ゾンビ",35,"fantasy_zombie_man.png",["攻撃", "毒", "待機","攻撃"]));
+            this.enemies.push(E("ゾンビ",35,"fantasy_zombie_man.png",["攻撃", "毒", "待機","攻撃"]));
+        }
+
+        if(s.name==="デュラハン")
+            this.enemies.push(E("デュラハン",65,"fantasy_dullahan.png",["攻撃","チャージ", "強攻撃", "スタン"]));
+
+        if(s.name === "ドラゴン"){
+            let d = E("ドラゴン",80,"fantasy_dragon.png",["強攻撃","毒","チャージ","ブレス","強攻撃"]);
+            d.physRes = 15;
+            this.enemies.push(d);
+        }
+
+        if(s.name === "魔王"){
+            let m = E("魔王",120,"fantasy_maou_devil.png",["強攻撃","詠唱","ファイア","回復","強攻撃","詠唱","ファイア","詠唱","スタン"]);
+            m.physRes = 5;
+            m.magRes = 15;
+            this.enemies.push(m);
+        }
+
+        this.battle();
+
+        }
+
+    // ================= DRAW =================
+    draw(){
+
+        this.clear();
+
+        if(this.bg.complete){
+            this.ctx.drawImage(this.bg,0,0,500,400);
+        }
+
+        this.enemyRects=[];
+
+        this.enemies.forEach((e,i)=>{
+
+            if(e.hp<=0) return;
+
+            let x=100+i*120;
+            let y=150;
+
+            if(e.loaded && e.img.complete){
+                this.ctx.drawImage(e.img,x,y,80,80);
+            }else{
+                this.ctx.fillStyle="red";
+                this.ctx.fillRect(x,y,80,80);
+            }
+
+            this.ctx.fillStyle="#fff";
+            this.ctx.fillText(e.name+" HP:"+e.hp,x,y-10);
+
+            this.enemyRects.push({x,y,w:80,h:80,e});
+        });
+
+        this.updateStatus();
+    }
+
+    // ================= BATTLE =================
+    battle(){
+
+        this.ui.innerHTML="";
+
+        // ===== スタンチェック =====
+        if(this.hero.stun > 0){
+            this.hero.stun--;
+            this.logMsg("プレイヤーはスタンして動けない！");
+
+            setTimeout(()=>this.enemyTurn(), 800);
+            return;
+        }
+
+        this.btn("攻撃",()=>{this.mode="atk"; this.logMsg("敵をクリック");});
+        this.btn("魔法",()=>this.magic());
+        this.btn("回復",()=>this.heal());
+        this.btn("防御",()=>this.guard());
+        this.btn("能力",()=>this.showAbility());
+    }
+
+    // ================= CLICK =================
+    click(e){
+
+        if(this.mode!=="atk") return;
+
+        let r=this.cv.getBoundingClientRect();
+        let scaleX = this.cv.width / this.cv.clientWidth;
+        let scaleY = this.cv.height / this.cv.clientHeight;
+
+        let x = (e.clientX - r.left) * scaleX;
+        let y = (e.clientY - r.top) * scaleY;
+
+        for(let o of this.enemyRects){
+
+            if(x>=o.x && x<=o.x+o.w && y>=o.y && y<=o.y+o.h){
+                this.attack(o.e);
+                break;
+            }
+        }
+    }
+
+    // ================= PLAYER =================
+    attack(e){
+
+        this.mode = null;
+
+        this.logClear();
+
+        this.logMsg("----勇者のターン----");
+
+        let d=rand(20,30);
+
+        // ===== クリティカル =====
+        let critical = false;
+        if(Math.random() < 0.2){
+            d *= 2;
+            critical = true;
+        }
+        d = Math.max(0, d - (e.physRes || 0) - (e.tempPhys || 0));
+
+        e.hp=Math.max(0,e.hp-d);
+
+        if(critical){
+            this.logMsg("クリティカル！");
+        }
+
+        this.logMsg(e.name+"に"+d);
+
+        this.ui.innerHTML = "";
+        this.btn("次へ",()=>{ this.enemyTurn(); });
+    }
+
+    magic(){
+
+        this.logClear();
+
+        this.logMsg("----勇者のターン----");
+
+        this.enemies.forEach(e=>{
+            if(e.hp<=0) return;
+
+            let d = rand(15,25);
+
+            d = Math.max(0, d - (e.magRes || 0) - (e.tempMag || 0));
+
+            e.hp = Math.max(0, e.hp - d);
+
+            this.logMsg(e.name+"に"+d+"ダメージ");
+        });
+
+        this.ui.innerHTML = "";
+        this.btn("次へ",()=>{ this.enemyTurn(); });
+    }
+
+    heal(){
+
+        this.logClear();
+
+        this.logMsg("----勇者のターン----");
+
+        let heal = rand(15, 25);
+
+        this.hero.hp = Math.min(this.hero.max_hp, this.hero.hp + heal);
+
+        this.hero.poison = 0;
+
+        this.logMsg("勇者は" + heal + "回復した！");
+        this.logMsg("毒が解除された");
+
+        this.ui.innerHTML = "";
+        this.btn("次へ",()=>{ this.enemyTurn(); });
+    }
+
+    guard(){
+
+        this.logClear();
+
+        this.logMsg("----勇者のターン----");
+
+        this.hero.guard=true;
+
+        this.logMsg("勇者は防御態勢に入った！（被ダメ半減）");
+
+        this.ui.innerHTML = "";
+        this.btn("次へ",()=>{ this.enemyTurn(); });
+    }
+
+    // ================= ENEMY AI =================
+    enemyTurn(){
+
+        this.processing = true;
+
+        this.logMsg("----敵ターン----");
+
+        if(this.enemies.every(e => e.hp <= 0)){
+            this.logClear();
+
+            this.logMsg("全滅！");
+            this.logMsg("ステージクリア！");
+
+            this.processing = false;
+
+            // UIをリセット
+            this.ui.innerHTML = "";
+
+            // 手動遷移に変更
+            this.btn("次へ",()=>{
+                this.stage++;
+                this.nextStage();
+            });
+
+            return;
+        }
+
+        this.enemies.forEach(e => {
+
+            if(e.hp <= 0) return;
+
+            let a = e.next();
+
+            this.logMsg(e.name + "の行動:" + a);
+
+            let d = 0;
+            let msg = "";
+
+            // ================= 攻撃 =================
+            if(a === "攻撃"){
+                d = rand(10, 15);
+                msg = e.name + "の攻撃！ " + d + "ダメージ";
+            }
+
+            // ================= 強攻撃 =================
+            if(a === "強攻撃"){
+                d = rand(15, 20);
+
+                if(Math.random() < 0.2) d += 10;
+
+                if(e.charge){
+                    d += 5;
+                    e.charge = false;
+                }
+
+                msg = e.name + "の強攻撃！ " + d + "ダメージ";
+            }
+
+            // ================= 毒 =================
+            if(a === "毒"){
+                d = rand(5, 10);
+                this.hero.poison = 3;
+                msg = e.name + "の毒攻撃！ " + d + "ダメージ（毒付与）";
+            }
+
+            // ================= ファイア =================
+            if(a === "ファイア"){
+                d = rand(20, 25);
+
+                if(e.cast){
+                    d += 5;
+                    e.cast = false;
+                }
+
+                msg = e.name + "のファイア！ " + d + "ダメージ";
+            }
+
+            // ================= 待機 =================
+            if(a === "待機"){
+                d = 0;
+                this.logMsg(e.name + "は様子を見ている");
+            }
+
+            // ================= チャージ =================
+            if(a === "チャージ"){
+                e.charge = true;
+                this.logMsg(e.name + "は力を溜めている");
+            }
+
+            // ================= ブレス =================
+            if(a === "ブレス"){
+                d = rand(15, 20);
+
+                if(e.charge){
+                    d += 5;
+                    e.charge = false;
+                }
+
+                msg = e.name + "のブレス！ " + d + "ダメージ";
+            }
+
+            // ================= 詠唱 =================
+            if(a === "詠唱"){
+                e.cast = true;
+                e.tempMag += 5;
+                this.logMsg(e.name + "は詠唱を始めた");
+            }
+
+            // ================= 回復 =================
+            if(a === "回復"){
+                let heal = rand(10, 15);
+                e.hp += heal;
+                this.logMsg(e.name + "はHPを" + heal + "回復した");
+            }
+
+            // ================= スタン =================
+            if(a === "スタン"){
+                d = rand(10, 15);
+
+                if(e.cast){
+                    d += 5;
+                    e.cast = false;
+                }
+
+                msg = e.name + "のスタン攻撃！ " + d + "ダメージ";
+
+                if(Math.random() < 0.5){
+                    if(this.hero.guard){
+                        this.logMsg("防御でスタンを防いだ！（ダメージも軽減）");
+                    }else{
+                        this.hero.stun = 1;
+                        this.logMsg("プレイヤーはスタン！");
+                    }
+                }
+            }
+
+            // ================= 防御・耐性反映 =================
+            if(a === "ファイア"){
+                d = Math.max(0, d - (this.hero.magRes || 0));
+            }else{
+                d = Math.max(0, d - (this.hero.physRes || 0));
+            }
+
+            // ★次に防御
+            if(this.hero.guard){
+                d = Math.floor(d / 2);
+            }
+
+            this.hero.hp -= d;
+
+            if(d > 0){
+                if(this.hero.guard){
+                    msg += "（防御で半減：" + d + "）";
+                }
+                this.logMsg(msg);
+            }
+
+            if(a === "ファイア"){
+                e.cast = false;
+            }
+        });
+
+        // ================= 毒 =================
+        if(this.hero.poison > 0){
+            let d = rand(5, 10);
+            this.hero.hp -= d;
+            this.hero.poison--;
+            this.logMsg("毒:" + d);
+        }
+
+        // ================= ターン終了処理 =================
+        this.hero.guard = false;
+
+        this.enemies.forEach(e => {
+            e.tempPhys = 0;
+            e.tempMag  = 0;
+        });
+
+        if(this.hero.hp <= 0){
+            this.logMsg("GAME OVER");
+            setTimeout(() => this.showTitle(), 1500);
+        }
+
+        this.updateStatus();
+
+        this.processing = false;
+
+        this.ui.innerHTML = "";
+        this.btn("次へ",()=>this.battle());
+
+    }
+}
+
+new Game();
+
+</script>
+</body>
+</html>
