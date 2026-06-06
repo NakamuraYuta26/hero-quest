@@ -22,23 +22,65 @@ canvas{
     height:auto;
 }
 
+#ui{
+    display:flex;
+    flex-wrap:nowrap;
+    justify-content:center;
+    gap:4px;
+    margin-top:5px;
+}
+
 button{
-    margin:5px;
-    padding:15px;
-    font-size:16px;
-    width:80%;
-    max-width:300px;
+    flex:1;
+    min-width:0;
+    padding:8px 0;
+    font-size:13px;
+    margin:0;
+    max-width:90px;
 }
 
 #status{
-    margin:10px;
+    margin:8px 0;
     color:#0f0;
+
+    display:flex;
+    justify-content:center;
+    flex-wrap:wrap;
+    gap:10px;
+
+    font-size:14px;
 }
 
 #log{
-    height:150px;
-    overflow:auto;
-    font-size:16px;
+    height:120px;
+    overflow-y:auto;
+
+    border:1px solid #888;
+    background:#000;
+
+    text-align:left;
+
+    padding:8px;
+    margin-top:10px;
+
+    font-size:14px;
+}
+
+@media (max-width:600px){
+
+    button{
+        font-size:12px;
+        padding:6px 2px;
+    }
+
+    #log{
+        height:100px;
+        font-size:12px;
+    }
+
+    #status{
+        font-size:12px;
+    }
 }
 </style>
 </head>
@@ -50,8 +92,8 @@ button{
 <canvas id="canvas" width="500" height="400"></canvas>
 
 <div id="status"></div>
-<div id="ui"></div>
 <div id="log"></div>
+<div id="ui"></div>
 
 <script>
 
@@ -179,11 +221,13 @@ class Game{
     // ================= STATUS =================
     updateStatus(){
         this.statusBox.innerHTML=
-        `HP:${this.hero.hp}/${this.hero.max_hp}
-        毒:${this.hero.poison}
-        スタン:${this.hero.stun}
-        防御:${this.hero.guard?"ON":"OFF"}
-        敵:${this.enemies.filter(e=>e.hp>0).length}`;
+        `
+        <span>HP:${this.hero.hp}/${this.hero.max_hp}</span>
+        <span>☠:${this.hero.poison}</span>
+        <span>💫:${this.hero.stun}</span>
+        <span>🛡:${this.hero.guard ? "ON" : "OFF"}</span>
+        <span>敵:${this.enemies.filter(e=>e.hp>0).length}</span>
+        `;
     }
 
     // ================= TITLE =================
@@ -228,6 +272,7 @@ class Game{
         this.ui.style.padding = "20px";
         this.ui.style.border = "1px solid #fff";
         this.ui.style.width = "300px";
+        this.ui.style.display = "block";
 
         // クレジット表示（制作者）
         let title = document.createElement("div");
@@ -258,6 +303,10 @@ class Game{
 
         // 戻るボタン
         let btn = document.createElement("button");
+        btn.style.width = "150px";
+        btn.style.maxWidth = "150px";
+        btn.style.display = "block";
+        btn.style.margin = "15px auto";
         btn.textContent = "戻る";
         btn.style.marginTop = "15px";
         btn.onclick = () => this.backToTitle();
@@ -291,11 +340,12 @@ class Game{
         this.ui.style.padding = "20px";
         this.ui.style.border = "1px solid #fff";
         this.ui.style.width = "320px";
+        this.ui.style.display = "block";
 
         // ===== 勇者画像 =====
         let img = document.createElement("img");
         img.src = "yuusya_game.png";
-        img.style.width = "120px";
+        img.style.width = "180px";
         img.style.display = "block";
         img.style.margin = "0 auto 10px";
 
@@ -309,15 +359,20 @@ class Game{
         // ===== 説明 =====
         let text = document.createElement("div");
         text.innerHTML = `
-            攻撃：20〜30ダメージ（クリティカルあり）<br>
-            魔法：15〜25ダメージ（全体攻撃）<br>
-            回復：15〜25回復＋毒解除<br>
+            攻撃：20〜35ダメージ（クリティカルあり）<br>
+            魔法：15〜30ダメージ（全体攻撃）<br>
+            回復：20〜30回復＋毒解除<br>
             防御：被ダメージ半減<br>
         `;
-        text.style.fontSize = "14px";
+        text.style.fontSize = "18px";
+        text.style.lineHeight = "1.8";
 
         // ===== 戻るボタン =====
         let btn = document.createElement("button");
+        btn.style.width = "150px";
+        btn.style.maxWidth = "150px";
+        btn.style.display = "block";
+        btn.style.margin = "15px auto";
         btn.textContent = "戻る";
         btn.style.marginTop = "15px";
         btn.onclick = () => this.backToBattle();
@@ -345,6 +400,7 @@ class Game{
         this.ui.style.padding = "";
         this.ui.style.border = "";
         this.ui.style.width = "";
+        this.ui.style.display = "flex";
 
         this.showTitle();
     }
@@ -365,6 +421,7 @@ class Game{
         this.ui.style.padding = "";
         this.ui.style.border = "";
         this.ui.style.width = "";
+        this.ui.style.display = "flex";
 
         this.state = "play";
 
@@ -541,7 +598,7 @@ class Game{
 
         this.logMsg("----勇者のターン----");
 
-        let d=rand(20,30);
+        let d=rand(20,35);
 
         // ===== クリティカル =====
         let critical = false;
@@ -557,7 +614,7 @@ class Game{
             this.logMsg("クリティカル！");
         }
 
-        this.logMsg(e.name+"に"+d);
+        this.logMsg(e.name+"に"+d+"ダメージ！");
 
         this.ui.innerHTML = "";
         this.btn("次へ",()=>{ this.enemyTurn(); });
@@ -572,13 +629,13 @@ class Game{
         this.enemies.forEach(e=>{
             if(e.hp<=0) return;
 
-            let d = rand(15,25);
+            let d = rand(15,30);
 
             d = Math.max(0, d - (e.magRes || 0) - (e.tempMag || 0));
 
             e.hp = Math.max(0, e.hp - d);
 
-            this.logMsg(e.name+"に"+d+"ダメージ");
+            this.logMsg(e.name+"に"+d+"ダメージ！");
         });
 
         this.ui.innerHTML = "";
@@ -591,7 +648,7 @@ class Game{
 
         this.logMsg("----勇者のターン----");
 
-        let heal = rand(15, 25);
+        let heal = rand(20, 30);
 
         this.hero.hp = Math.min(this.hero.max_hp, this.hero.hp + heal);
 
@@ -659,28 +716,37 @@ class Game{
             // ================= 攻撃 =================
             if(a === "攻撃"){
                 d = rand(10, 15);
-                msg = e.name + "の攻撃！ " + d + "ダメージ";
+                msg = e.name + "の攻撃！ " + d + "ダメージ！";
             }
 
             // ================= 強攻撃 =================
             if(a === "強攻撃"){
                 d = rand(15, 20);
 
-                if(Math.random() < 0.2) d += 10;
+                let critical = false;
+
+                if(Math.random() < 0.2){
+                    d += 10;
+                    critical = true;
+                }
 
                 if(e.charge){
                     d += 5;
                     e.charge = false;
                 }
 
-                msg = e.name + "の強攻撃！ " + d + "ダメージ";
+                if(critical){
+                    this.logMsg("クリティカル！");
+                }
+
+                msg = e.name + "の強攻撃！ " + d + "ダメージ！";
             }
 
             // ================= 毒 =================
             if(a === "毒"){
                 d = rand(5, 10);
                 this.hero.poison = 3;
-                msg = e.name + "の毒攻撃！ " + d + "ダメージ（毒付与）";
+                msg = e.name + "の毒攻撃！ " + d + "ダメージ！（毒付与）";
             }
 
             // ================= ファイア =================
@@ -692,7 +758,7 @@ class Game{
                     e.cast = false;
                 }
 
-                msg = e.name + "のファイア！ " + d + "ダメージ";
+                msg = e.name + "のファイア！ " + d + "ダメージ！";
             }
 
             // ================= 待機 =================
@@ -716,7 +782,7 @@ class Game{
                     e.charge = false;
                 }
 
-                msg = e.name + "のブレス！ " + d + "ダメージ";
+                msg = e.name + "のブレス！ " + d + "ダメージ！";
             }
 
             // ================= 詠唱 =================
@@ -730,7 +796,7 @@ class Game{
             if(a === "回復"){
                 let heal = rand(10, 15);
                 e.hp += heal;
-                this.logMsg(e.name + "はHPを" + heal + "回復した");
+                this.logMsg(e.name + "はHPを" + heal + "回復した！");
             }
 
             // ================= スタン =================
@@ -738,11 +804,11 @@ class Game{
                 d = rand(10, 15);
 
                 if(e.cast){
-                    d += 5;
+                    d += 10;
                     e.cast = false;
                 }
 
-                msg = e.name + "のスタン攻撃！ " + d + "ダメージ";
+                msg = e.name + "のスタン攻撃！ " + d + "ダメージ！";
 
                 if(Math.random() < 0.5){
                     if(this.hero.guard){
